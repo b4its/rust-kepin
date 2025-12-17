@@ -1,7 +1,7 @@
 ### API Testing
 -   Register
 ```bash
-curl -X POST http://localhost:8000/api/auth/register \
+curl -X POST http://localhost:8000/api/v1/auth/register \
      -H "Content-Type: application/json" \
      -d '{
        "email": "kepin@address.com",
@@ -12,7 +12,7 @@ curl -X POST http://localhost:8000/api/auth/register \
 
 -   Login
 ```bash
-curl -v -X POST http://localhost:8000/api/auth/login \
+curl -v -X POST http://localhost:8000/api/v1/auth/login \
      -H "Content-Type: application/json" \
      -d '{
        "email": "kepin@address.com",
@@ -22,5 +22,5 @@ curl -v -X POST http://localhost:8000/api/auth/login \
 
 -   Logout
 ```bash
-curl -X POST http://localhost:8000/api/auth/logout
+curl -X POST http://localhost:8000/api/v1/auth/logout
 ```
