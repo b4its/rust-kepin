@@ -881,6 +881,7 @@ dependencies = [
  "jsonwebtoken",
  "mongodb",
  "serde",
+ "serde_json",
  "tokio",
  "tower-cookies",
  "tower-http",

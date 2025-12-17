@@ -24,3 +24,8 @@ curl -v -X POST http://localhost:8000/api/v1/auth/login \
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/logout
 ```
+
+curl -v -X POST http://localhost:8000/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email": "kepin@address.com", "password": "kepin123"}' \
+     -c cookies.txt
