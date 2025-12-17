@@ -82,10 +82,14 @@ pub async fn me(
     if let Some(cookie) = cookies.get("session") {
         let email = cookie.value();
         if let Some(user) = state.user_repo.find_by_email(email).await {
+            // PERBAIKAN: Konversi ObjectId ke String
+            let user_id_str = user.id.map(|oid| oid.to_string()).unwrap_or_else(|| "404".to_string());
+
             return (StatusCode::OK, Json(json!({
-                "name": user.name,
+                "id": user_id_str, // Sekarang ini adalah String murni
+                "name": user.name, 
                 "email": user.email,
-                "avatar": "" // Anda bisa menambahkan field avatar di DB nanti
+                "avatar": "https://github.com/shadcn.png"
             }))).into_response();
         }
     }

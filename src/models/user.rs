@@ -11,7 +11,7 @@ pub struct User {
     pub plan: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AuthRequest {
     pub email: String,
     pub name: Option<String>,
