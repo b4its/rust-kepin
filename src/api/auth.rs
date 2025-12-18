@@ -89,6 +89,7 @@ pub async fn me(
                 "id": user_id_str, // Sekarang ini adalah String murni
                 "name": user.name, 
                 "email": user.email,
+                "plan": user.plan,
                 "avatar": "https://github.com/shadcn.png"
             }))).into_response();
         }

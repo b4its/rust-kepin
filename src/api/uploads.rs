@@ -125,41 +125,44 @@ pub async fn get_my_uploads(
 // --- 3. Endpoint Delete File ---
 pub async fn delete_file(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>, // Path ini sekarang benar merujuk ke axum::extract::Path
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
     
-    // 1. Cek keberadaan data di Database
+    // 1. Cari data upload di database (untuk mendapatkan path file fisik)
     let upload_record = match state.upload_repo.find_by_id(&id).await {
         Ok(Some(record)) => record,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "File not found"}))).into_response(),
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid ID format"}))).into_response(),
     };
 
-    // 2. Hapus File Fisik
-    let relative_path = upload_record.file_path.trim_start_matches("/public/");
-    // Gunakan StdPath untuk operasi file sistem
-    let system_path = StdPath::new("media").join(relative_path);
-
-    // Lakukan penghapusan file fisik
-    if let Err(e) = remove_file(&system_path).await {
-        eprintln!("Warning: Gagal menghapus file fisik {:?}: {}", system_path, e);
-    } else {
-        println!("Success: File fisik dihapus {:?}", system_path);
+    // 2. HAPUS OTOMATIS: Record di financial_reports
+    // Karena id di sini adalah ID dari user_upload, kita gunakan sebagai filter
+    if let Err(e) = state.financial_repo.delete_by_upload_id(&id).await {
+        // Kita log errornya, tapi tetap lanjut menghapus file fisik
+        eprintln!("Error deleting financial records for upload {}: {}", id, e);
     }
 
-    // 3. Hapus Record Database
+    // 3. Hapus File Fisik
+    let relative_path = upload_record.file_path.trim_start_matches("/public/");
+    let system_path = StdPath::new("media").join(relative_path);
+
+    if let Err(e) = remove_file(&system_path).await {
+        eprintln!("Warning: File fisik tidak ditemukan atau gagal dihapus: {}", e);
+    }
+
+    // 4. Hapus Record Upload (Induk)
     match state.upload_repo.delete(&id).await {
         Ok(count) => {
             if count > 0 {
                 (StatusCode::OK, Json(json!({
-                    "status": "success", 
-                    "message": "File and record deleted successfully",
-                    "deleted_id": id
+                    "status": "success",
+                    "message": "File, financial reports, and upload record deleted",
+                    "id": id
                 }))).into_response()
             } else {
-                (StatusCode::NOT_FOUND, Json(json!({"error": "Record not found"}))).into_response()
+                (StatusCode::NOT_FOUND, Json(json!({"error": "Upload record already gone"}))).into_response()
             }
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }

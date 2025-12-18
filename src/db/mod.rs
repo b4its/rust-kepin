@@ -1,20 +1,18 @@
 use mongodb::{Client, Database};
-// Import User Repository (Existing)
 use crate::repository::user_repo::UserRepository;
-// Import Upload Repository (BARU - Tambahkan ini)
 use crate::repository::upload_repo::UploadRepository;
+use crate::repository::financial_repo::FinancialRepository; // Import baru
 
 pub struct AppState {
-    pub db: Database,
-    pub user_repo: UserRepository,
-    pub upload_repo: UploadRepository, 
+    pub db: mongodb::Database,
+    pub user_repo: crate::repository::user_repo::UserRepository,
+    pub upload_repo: crate::repository::upload_repo::UploadRepository,
+    pub financial_repo: FinancialRepository, // Tambah field ini
     pub kolosal_key: String,
 }
 
 pub async fn init_db() -> Database {
-    // Pastikan variabel environment MONGODB_URI ada di .env
-    let uri = std::env::var("MONGODB_URI").expect("MONGODB_URI tidak ditemukan di .env");
-    
+    let uri = std::env::var("MONGODB_URI").expect("MONGODB_URI error");
     let client = Client::with_uri_str(uri).await.unwrap();
-    client.database("kepin") // Pastikan nama DB sesuai keinginan
+    client.database("kepin")
 }
