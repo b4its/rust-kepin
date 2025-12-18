@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1.0", features = ["full"] }
-mongodb = "2.8"
+
+mongodb = { version = "2.8", features = ["bson-chrono-0_4"] } 
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dotenvy = "0.15"
@@ -14,5 +16,11 @@ jsonwebtoken = "9.0"
 bcrypt = "0.15"
 tower-cookies = "0.10"
 tower-http = { version = "0.6.8", features = ["trace", "cors", "fs"] }
-chrono = "0.4.42"
 
+# Ini agar struct JSON bisa melakukan serialize/deserialize tanggal
+chrono = { version = "0.4.42", features = ["serde"] }
+async-stream = "0.3" 
+futures = "0.3"
+base64 = "0.21"
+reqwest = { version = "0.11", features = ["json", "multipart", "stream"] }
+calamine = "0.24"
