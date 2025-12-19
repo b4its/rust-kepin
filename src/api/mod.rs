@@ -1,6 +1,8 @@
 // src/api/mod.rs
 pub mod auth;
 pub mod uploads;
-pub mod smart; 
+mod smart; // Private mod
 
-pub use smart::analyze;
+// Re-export 'analyze' agar terlihat seolah-olah ada di bawah 'api'
+pub use smart::normal_analyze;
+pub use smart::deep_analyze;

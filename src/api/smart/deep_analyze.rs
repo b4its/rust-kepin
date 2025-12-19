@@ -53,7 +53,7 @@ struct StreamDelta {
 }
 
 // --- Helper: Excel Parser ---
-fn excel_bytes_to_csv_optimized(bytes: Vec<u8>, limit: usize) -> Result<String, String> {
+fn deep_excel_bytes_to_csv_optimized(bytes: Vec<u8>, limit: usize) -> Result<String, String> {
     let cursor = Cursor::new(bytes);
     let mut workbook = Xlsx::new(cursor).map_err(|e| e.to_string())?;
     
@@ -91,22 +91,9 @@ fn excel_bytes_to_csv_optimized(bytes: Vec<u8>, limit: usize) -> Result<String, 
     Ok(buffer)
 }
 
-// --- Handler 1: GET Financial Data ---
-pub async fn get_financial_data(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<FinancialQuery>
-) -> impl IntoResponse {
-    match state.financial_repo.find_by_user(&query.user_id).await {
-        Ok(records) => (StatusCode::OK, Json(records)).into_response(),
-        Err(e) => {
-            eprintln!("Database Error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed fetch"}))).into_response()
-        }
-    }
-}
 
 // --- Handler 2: Analyze Stream (POST) ---
-pub async fn analyze_document_stream(
+pub async fn deep_analyze_document_stream(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AnalyzeRequest>,
 ) -> impl IntoResponse {
@@ -124,7 +111,7 @@ pub async fn analyze_document_stream(
 
     const CHAR_LIMIT: usize = 50_000;
     let content_result = if ["xlsx", "xls"].contains(&extension.as_str()) {
-        task::spawn_blocking(move || excel_bytes_to_csv_optimized(file_bytes, CHAR_LIMIT)).await.unwrap_or(Err("Thread Error".to_string()))
+        task::spawn_blocking(move || deep_excel_bytes_to_csv_optimized(file_bytes, CHAR_LIMIT)).await.unwrap_or(Err("Thread Error".to_string()))
     } else if ["csv", "txt", "json", "md", "html"].contains(&extension.as_str()) {
         match String::from_utf8(file_bytes) {
             Ok(mut s) => {
@@ -146,42 +133,48 @@ pub async fn analyze_document_stream(
         ])).into_response(),
     };
 
-    let system_prompt = r#"You are a high-precision Financial Data Extraction Engine specialized in Indonesian financial statements (Laporan Keuangan). 
-    Your goal is to parse MULTIPLE SHEETS and consolidate data into a single, strict JSON output.
+    let system_prompt = r#"You are a high-precision Financial Data Extraction Engine.
+Your task is to parse financial report data (CSV/Text) from MULTIPLE SHEETS and extract key metrics into a strict JSON format.
 
-    ### Extraction Rules:
-    1.  **Priority & Period**: Only extract data for the "Current Period" (Periode Berjalan). Explicitly ignore columns labeled "Prior Year", "Comparative", or "Audit Sebelumnya".
-    2.  **Numeric Integrity**: 
-        - Extract raw numbers only. Do not perform any arithmetic.
-        - Format: Convert (1,234.56) or "1.234,56-" into a standard negative number: -1234.56.
-        - If a value is dash "-" or "nil", treat it as 0.
-    3.  **Smart Matching**: Use fuzzy matching for Indonesian/English financial terms.
-        - `total_aset`: (Total Assets)
-        - `total_liabilitas`: (Total Liabilities)
-        - `total_ekuitas`: (Total Equity)
-        - `laba_bersih`: (Net Profit/Loss, Laba Tahun Berjalan, Profit attributable to owners)
-    4.  **Metadata**: 
-        - `nama_entitas`: Find the legal entity name on the cover or header.
-        - `periode_laporan`: Convert to ISO-8601 (YYYY-MM-DD) based on the balance sheet date.
-        - `satuan_angka`: Detect if numbers are in Full, Thousands (Ribuan), or Millions (Jutaan).
+### EXTRACTION RULES:
+1. **Target Data:** Scan the entire document. The data is split across sections (e.g., General Info, Financial Position, Profit Loss).
+   - Locate the **Current Reporting Period** column (look for dates like "2025-03-31" or terms like "Current Period").
+   - Ignore "Prior Year" or "Beginning" columns.
+2. **Number Formatting:**
+   - Extract numbers AS IS (raw values).
+   - Do NOT multiply by millions/thousands automatically.
+   - Handle parentheses `(123)` as negative `-123`.
+   - Remove thousand separators (e.g., `1.234,56` -> `1234.56`).
 
-    ### Data Keuangan Lain (Contextual Extraction):
-    Extract 5-10++ additional significant line items (e.g., Pendapatan/Revenue, Beban Pokok/COGS, Kas/Cash) that characterize the company's performance.
+### SMART FIELD MAPPING (Fuzzy Logic):
+Do NOT look for exact string matches. Accounting terms vary by company. Use semantic understanding to find the closest meaning:
+1. **`nama_entitas`**: Look for "Nama Perusahaan", "Entitas", "Entity Name", or the company name mentioned in the header.
+2. **`mata_uang`**: Look for "Currency", "Mata Uang Pelaporan", "Disajikan dalam..." (e.g., IDR, USD).
+3. **`satuan_angka`**: Look for scale indicators like "Dalam Jutaan", "In Millions", "Ribuan", "Thousands", "Rounding".
+4. **`total_aset`**: Find the Grand Total of Assets.
+   - Keywords: "Jumlah Aset", "Total Aset", "Total Aktiva", "Total Harta", "Jumlah Kekayaan".
+5. **`total_liabilitas`**: Find the Grand Total of Liabilities.
+   - Keywords: "Jumlah Liabilitas", "Total Liabilitas", "Total Kewajiban", "Jumlah Utang", "Total Hutang".
+6. **`total_ekuitas`**: Find the Grand Total of Equity.
+   - Keywords: "Jumlah Ekuitas", "Total Ekuitas", "Total Modal", "Ekuitas Bersih".
+7. **`laba_bersih`**: Find the final bottom-line profit.
+   - Keywords: "Laba Bersih", "Laba Tahun Berjalan", "Laba Periode Berjalan", "Net Income", "Profit for the period", "Comprehensive Income attributable to parent" (if Net Income is missing).
 
-    ### Output Schema (Strict JSON):
-    {
-    "nama_entitas": "string",
-    "periode_laporan": "YYYY-MM-DD",
-    "mata_uang": "string",
-    "satuan_angka": "string",
-    "total_aset": number,
-    "total_liabilitas": number,
-    "total_ekuitas": number,
-    "laba_bersih": number,
-    "data_keuangan_lain": [
-        { "keterangan": "string", "nilai": number }
-    ]
-    }"#;
+### OUTPUT SCHEMA (Strict JSON):
+{
+  "nama_entitas": "string",
+  "periode_laporan": "YYYY-MM-DD",
+  "mata_uang": "string",
+  "satuan_angka": "string",
+  "total_aset": number,
+  "total_liabilitas": number,
+  "total_ekuitas": number,
+  "laba_bersih": number,
+  "data_keuangan_lain": [
+    { "keterangan": "string", "nilai": number }
+  ]
+}
+For `data_keuangan_lain`, extract 5-10 key items (e.g., Cash, Revenue, Cost of Revenue) using their original names found in the doc."#;
 
     let user_prompt = format!("ANALYZE DATA:\n---\n{}\n---\nOutput JSON only.", truncated_content);
 
@@ -199,7 +192,7 @@ pub async fn analyze_document_stream(
             "stream": true,
             "temperature": 0.1,
             "response_format": { "type": "json_object" },
-            "max_tokens": 3000
+            "max_tokens": 5000
         }));
 
     let state_clone = state.clone();
