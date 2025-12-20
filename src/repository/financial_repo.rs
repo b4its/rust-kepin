@@ -38,6 +38,12 @@ impl FinancialRepository {
         Ok(results)
     }
 
+    pub async fn count_by_user(&self, user_id: &str) -> mongodb::error::Result<u64> {
+        // Menghitung jumlah dokumen di 'financial_reports' milik user_id ini
+        let filter = doc! { "user_id": user_id };
+        self.collection.count_documents(filter, None).await
+    }
+
     pub async fn delete_by_upload_id(&self, upload_id: &str) -> mongodb::error::Result<u64> {
         // Query untuk mencari dokumen dengan id_userupload yang cocok
         let filter = doc! { "id_userupload": upload_id };

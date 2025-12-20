@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 use std::path::{Path as StdPath}; // Kita rename Path standar jadi StdPath biar gak bentrok
 use std::sync::Arc;
 use chrono::{Local, Utc};
-
+use mongodb::bson::doc;
 use crate::db::AppState;
 use crate::models::upload::UserUpload;
 
@@ -122,8 +122,57 @@ pub async fn get_my_uploads(
     }
 }
 
-// --- 3. Endpoint Delete File ---
-pub async fn delete_file(
+pub async fn get_upload_count(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<UserQuery>
+) -> impl IntoResponse {
+    match state.upload_repo.count_by_user(&query.user_id).await {
+        Ok(total) => {
+            (StatusCode::OK, Json(serde_json::json!({
+                "status": "success",
+                "total_uploads": total
+            }))).into_response()
+        },
+        Err(e) => {
+            eprintln!("Database Error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({"status": "error", "message": "Failed to count documents"}))
+            ).into_response()
+        }
+    }
+}
+
+pub async fn get_financial_stats(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<UserQuery> 
+) -> impl IntoResponse {
+    // Panggil fungsi dari repository melalui state
+    match state.upload_repo.get_uploads_stats(&query.user_id).await {
+        Ok(stats_data) => {
+            (StatusCode::OK, Json(json!({
+                "status": "success",
+                "data": stats_data
+            }))).into_response()
+        },
+        Err(e) => {
+            eprintln!("Dashboard Stats Error: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error" }))).into_response()
+        }
+    }
+}
+
+
+
+
+
+
+    
+    // --- 3. Endpoint Delete File ---
+
+
+
+    pub async fn delete_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {

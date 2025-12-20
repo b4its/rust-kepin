@@ -3,7 +3,7 @@ mod core;
 mod db;
 mod models;
 mod repository;
-mod services; // 1. Tambahkan ini agar folder services dikenali
+mod services;
 
 use axum::{
     routing::{post, get, delete},
@@ -14,7 +14,7 @@ use std::{sync::Arc, env, net::SocketAddr};
 
 use crate::db::AppState;
 use crate::repository::{user_repo::UserRepository, upload_repo::UploadRepository, financial_repo::FinancialRepository}; 
-use crate::services::extractor_client::GrpcClient; // 2. Import GrpcClient
+use crate::services::extractor_client::GrpcClient;
 use tower_cookies::CookieManagerLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -25,7 +25,7 @@ async fn main() {
     
     let database = db::init_db().await;
 
-    // 3. Inisialisasi gRPC Client (Pastikan Python service jalan di port ini)
+    // Inisialisasi gRPC Client
     let grpc_addr = env::var("GRPC_EXTRACTOR_URL").unwrap_or_else(|_| "http://127.0.0.1:50051".to_string());
     let grpc_client = GrpcClient::connect(grpc_addr)
         .await
@@ -37,7 +37,7 @@ async fn main() {
         upload_repo: UploadRepository::new(&database),
         financial_repo: FinancialRepository::new(&database),
         kolosal_key: env::var("KOLOSAL_API_KEY").unwrap_or_else(|_| "default".to_string()),
-        grpc_client, // 4. Masukkan ke AppState
+        grpc_client,
     });
 
     let cors = CorsLayer::new()
@@ -47,21 +47,29 @@ async fn main() {
         .allow_credentials(true);
 
     let app = Router::new()
+        // Menyajikan file statis dari folder media
         .nest_service("/public", ServeDir::new("media"))
         .nest("/api/v1", Router::new()
+            // Auth Routes
             .nest("/auth", Router::new()
                 .route("/register", post(api::auth::register))
                 .route("/login", post(api::auth::login))
                 .route("/logout", post(api::auth::logout))
                 .route("/me", get(api::auth::me))
             )
+            // Upload Routes
             .route("/upload", post(api::uploads::upload_file))
             .route("/upload/:id", delete(api::uploads::delete_file))
             .route("/uploads", get(api::uploads::get_my_uploads))
+            
+            // Analyze & Financial Data Routes
             .route("/normal_analyze", post(api::normal_analyze::normal_analyze_document_stream))
             .route("/fast_analyze", post(api::fast_analyze::fast_analyze_document_stream))
             .route("/deep_analyze", post(api::deep_analyze::deep_analyze_document_stream))
+            
+            // Endpoint untuk data finansial dan statistik dashboard
             .route("/financial-data", get(api::normal_analyze::get_financial_data))
+            .route("/financial/stats", get(api::normal_analyze::get_financial_stats))
         )
         .layer(cors)
         .layer(CookieManagerLayer::new())

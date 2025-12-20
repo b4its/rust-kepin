@@ -67,6 +67,31 @@ pub async fn get_financial_data(
 }
 
 
+// dashboard get financial stats
+pub async fn get_financial_stats(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<FinancialQuery>
+) -> impl IntoResponse {
+    // Panggil fungsi yang ada di dalam repository melalui state
+    match state.upload_repo.get_uploads_stats(&query.user_id).await {
+        Ok(stats_data) => {
+            (StatusCode::OK, Json(serde_json::json!({
+                "status": "success",
+                "data": stats_data
+            }))).into_response()
+        },
+        Err(e) => {
+            eprintln!("Dashboard Stats Error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                Json(serde_json::json!({ "status": "error", "message": "Gagal menghitung statistik" }))
+            ).into_response()
+        }
+    }
+}
+
+
+
 // --- Helper: Excel Parser ---
 fn normal_excel_bytes_to_csv_optimized(bytes: Vec<u8>, limit: usize) -> Result<String, String> {
     let cursor = Cursor::new(bytes);
