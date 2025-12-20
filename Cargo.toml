@@ -26,3 +26,11 @@ reqwest = { version = "0.11", features = ["json", "multipart", "stream"] }
 calamine = "0.24"
 memmap2 = "0.9"
 strsim = "0.11"
+
+# gRPC
+tonic = "0.12"
+prost = "0.13"
+tokio-stream = "0.1"
+
+[build-dependencies]
+tonic-build = "0.12"

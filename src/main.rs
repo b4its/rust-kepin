@@ -3,6 +3,7 @@ mod core;
 mod db;
 mod models;
 mod repository;
+mod services; // 1. Tambahkan ini agar folder services dikenali
 
 use axum::{
     routing::{post, get, delete},
@@ -13,6 +14,7 @@ use std::{sync::Arc, env, net::SocketAddr};
 
 use crate::db::AppState;
 use crate::repository::{user_repo::UserRepository, upload_repo::UploadRepository, financial_repo::FinancialRepository}; 
+use crate::services::extractor_client::GrpcClient; // 2. Import GrpcClient
 use tower_cookies::CookieManagerLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -22,6 +24,12 @@ async fn main() {
     dotenvy::dotenv().ok();
     
     let database = db::init_db().await;
+
+    // 3. Inisialisasi gRPC Client (Pastikan Python service jalan di port ini)
+    let grpc_addr = env::var("GRPC_EXTRACTOR_URL").unwrap_or_else(|_| "http://127.0.0.1:50051".to_string());
+    let grpc_client = GrpcClient::connect(grpc_addr)
+        .await
+        .expect("❌ Gagal terhubung ke Python gRPC Service");
     
     let state = Arc::new(AppState {
         db: database.clone(),
@@ -29,6 +37,7 @@ async fn main() {
         upload_repo: UploadRepository::new(&database),
         financial_repo: FinancialRepository::new(&database),
         kolosal_key: env::var("KOLOSAL_API_KEY").unwrap_or_else(|_| "default".to_string()),
+        grpc_client, // 4. Masukkan ke AppState
     });
 
     let cors = CorsLayer::new()
@@ -49,7 +58,9 @@ async fn main() {
             .route("/upload", post(api::uploads::upload_file))
             .route("/upload/:id", delete(api::uploads::delete_file))
             .route("/uploads", get(api::uploads::get_my_uploads))
-            .route("/analyze", post(api::normal_analyze::normal_analyze_document_stream))
+            .route("/normal_analyze", post(api::normal_analyze::normal_analyze_document_stream))
+            .route("/fast_analyze", post(api::fast_analyze::fast_analyze_document_stream))
+            .route("/deep_analyze", post(api::deep_analyze::deep_analyze_document_stream))
             .route("/financial-data", get(api::normal_analyze::get_financial_data))
         )
         .layer(cors)
